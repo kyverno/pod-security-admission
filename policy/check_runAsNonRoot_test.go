@@ -73,7 +73,8 @@ func TestRunAsNonRoot(t *testing.T) {
 				},
 			}},
 			expectReason: `runAsNonRoot != true`,
-			expectDetail: `pod must not set securityContext.runAsNonRoot=false`,
+			expectDetail: `pod must not set securityContext.runAsNonRoot=false
+pod or container "a" must set securityContext.runAsNonRoot=true`,
 		},
 		{
 			name: "pod runAsNonRoot=false, enable field error list",
@@ -87,9 +88,11 @@ func TestRunAsNonRoot(t *testing.T) {
 				withFieldErrors: true,
 			},
 			expectReason: `runAsNonRoot != true`,
-			expectDetail: `pod must not set securityContext.runAsNonRoot=false`,
+			expectDetail: `pod must not set securityContext.runAsNonRoot=false
+pod or container "a" must set securityContext.runAsNonRoot=true`,
 			expectErrList: field.ErrorList{
 				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.runAsNonRoot", BadValue: false},
+				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.runAsNonRoot", BadValue: ""},
 			},
 		},
 		{
@@ -162,6 +165,41 @@ func TestRunAsNonRoot(t *testing.T) {
 			expectErrList: field.ErrorList{
 				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.runAsNonRoot", BadValue: ""},
 				{Type: field.ErrorTypeRequired, Field: "spec.containers[1].securityContext.runAsNonRoot", BadValue: ""},
+			},
+		},
+		{
+			name: "pod nil, container nil, initContainer runAsNonRoot=false",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Name: "i", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(false)}},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+				},
+			}},
+			expectReason: `runAsNonRoot != true`,
+			expectDetail: `container "i" must not set securityContext.runAsNonRoot=false
+pod or container "a" must set securityContext.runAsNonRoot=true`,
+		},
+		{
+			name: "pod nil, container nil, initContainer runAsNonRoot=false, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{Name: "i", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(false)}},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `runAsNonRoot != true`,
+			expectDetail: `container "i" must not set securityContext.runAsNonRoot=false
+pod or container "a" must set securityContext.runAsNonRoot=true`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.initContainers[0].securityContext.runAsNonRoot", BadValue: false},
+				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.runAsNonRoot", BadValue: ""},
 			},
 		},
 		{
