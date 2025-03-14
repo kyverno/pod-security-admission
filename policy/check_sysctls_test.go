@@ -205,6 +205,62 @@ func TestSysctls(t *testing.T) {
 				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_keepalive_probes"},
 			},
 		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_rmem",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_rmem`,
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_rmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_rmem`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_rmem"},
+			},
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_wmem",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_wmem`,
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_wmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_wmem`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_wmem"},
+			},
+		},
 	}
 
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
@@ -464,6 +520,109 @@ func TestSysctls_1_29(t *testing.T) {
 					if diff := cmp.Diff(tc.expectErrList, *result.ErrList, cmpOpts...); diff != "" {
 						t.Errorf("unexpected field errors (-want,+got):\n%s", diff)
 					}
+				}
+			} else if !result.Allowed {
+				t.Fatal("expected allowed")
+			}
+		})
+	}
+}
+
+func TestSysctls_1_32(t *testing.T) {
+	tests := []struct {
+		name          string
+		pod           *corev1.Pod
+		opts          options
+		allowed       bool
+		expectReason  string
+		expectDetail  string
+		expectErrList field.ErrorList
+	}{
+		{
+			name: "forbidden sysctls",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+		},
+		{
+			name: "forbidden sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "a"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[1].name", BadValue: "b"},
+			},
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_rmem",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_rmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_wmem",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 65536 16777216"}},
+				},
+			}},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_wmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 65536 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sysctlsV1Dot32(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
+			if !tc.allowed {
+				if result.Allowed {
+					t.Fatal("expected disallowed")
+				}
+				if e, a := tc.expectReason, result.ForbiddenReason; e != a {
+					t.Errorf("expected\n%s\ngot\n%s", e, a)
+				}
+				if e, a := tc.expectDetail, result.ForbiddenDetail; e != a {
+					t.Errorf("expected\n%s\ngot\n%s", e, a)
 				}
 			} else if !result.Allowed {
 				t.Fatal("expected allowed")

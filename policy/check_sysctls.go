@@ -47,6 +47,8 @@ spec.securityContext.sysctls[*].name
 'net.ipv4.tcp_fin_timeout'
 'net.ipv4.tcp_keepalive_intvl'
 'net.ipv4.tcp_keepalive_probes'
+'net.ipv4.tcp_rmem'
+'net.ipv4.tcp_wmem'
 
 */
 
@@ -72,38 +74,35 @@ func CheckSysctls() Check {
 				MinimumVersion: api.MajorMinorVersion(1, 29),
 				CheckPod:       withOptions(sysctlsV1Dot29),
 			},
+			{
+				MinimumVersion: api.MajorMinorVersion(1, 32),
+				CheckPod:       withOptions(sysctlsV1Dot32),
+			},
 		},
 	}
 }
 
 var (
-	sysctlsAllowedV1Dot0 = sets.New[string](
+	sysctlsAllowedV1Dot0 = sets.NewString(
 		"kernel.shm_rmid_forced",
 		"net.ipv4.ip_local_port_range",
 		"net.ipv4.tcp_syncookies",
 		"net.ipv4.ping_group_range",
 		"net.ipv4.ip_unprivileged_port_start",
 	)
-	sysctlsAllowedV1Dot27 = sets.New[string](
-		"kernel.shm_rmid_forced",
-		"net.ipv4.ip_local_port_range",
-		"net.ipv4.tcp_syncookies",
-		"net.ipv4.ping_group_range",
-		"net.ipv4.ip_unprivileged_port_start",
+	sysctlsAllowedV1Dot27 = sysctlsAllowedV1Dot0.Union(sets.NewString(
 		"net.ipv4.ip_local_reserved_ports",
-	)
-	sysctlsAllowedV1Dot29 = sets.New[string](
-		"kernel.shm_rmid_forced",
-		"net.ipv4.ip_local_port_range",
-		"net.ipv4.tcp_syncookies",
-		"net.ipv4.ping_group_range",
-		"net.ipv4.ip_unprivileged_port_start",
-		"net.ipv4.ip_local_reserved_ports",
+	))
+	sysctlsAllowedV1Dot29 = sysctlsAllowedV1Dot27.Union(sets.NewString(
 		"net.ipv4.tcp_keepalive_time",
 		"net.ipv4.tcp_fin_timeout",
 		"net.ipv4.tcp_keepalive_intvl",
 		"net.ipv4.tcp_keepalive_probes",
-	)
+	))
+	sysctlsAllowedV1Dot32 = sysctlsAllowedV1Dot29.Union(sets.NewString(
+		"net.ipv4.tcp_rmem",
+		"net.ipv4.tcp_wmem",
+	))
 )
 
 func sysctlsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
@@ -118,12 +117,16 @@ func sysctlsV1Dot29(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opt
 	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot29, opts)
 }
 
-func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, sysctlsAllowedSet sets.Set[string], opts options) CheckResult {
+func sysctlsV1Dot32(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot32, opts)
+}
+
+func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, sysctls_allowed_set sets.String, opts options) CheckResult {
 	forbiddenSysctls := NewViolations(opts.withFieldErrors)
 
 	if podSpec.SecurityContext != nil {
 		for i, sysctl := range podSpec.SecurityContext.Sysctls {
-			if !sysctlsAllowedSet.Has(sysctl.Name) {
+			if !sysctls_allowed_set.Has(sysctl.Name) {
 				if opts.withFieldErrors {
 					forbiddenSysctls.Add(sysctl.Name, withBadValue(forbidden(sysctlsPath.Index(i).Child("name")), sysctl.Name))
 				} else {

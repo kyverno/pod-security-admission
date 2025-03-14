@@ -29,14 +29,14 @@ import (
 
 func TestRunAsUser(t *testing.T) {
 	tests := []struct {
-		name                                     string
-		pod                                      *corev1.Pod
-		opts                                     options
-		expectAllow                              bool
-		expectReason                             string
-		expectDetail                             string
-		expectErrList                            field.ErrorList
-		enableUserNamespacesPodSecurityStandards bool
+		name           string
+		pod            *corev1.Pod
+		opts           options
+		expectAllowed  bool
+		expectReason   string
+		expectDetail   string
+		expectErrList  field.ErrorList
+		relaxForUserNS bool
 	}{
 		{
 			name: "pod runAsUser=0",
@@ -74,7 +74,7 @@ func TestRunAsUser(t *testing.T) {
 					{Name: "a", SecurityContext: nil},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=non-zero, enable field error list",
@@ -87,7 +87,7 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=nil",
@@ -97,7 +97,7 @@ func TestRunAsUser(t *testing.T) {
 					{Name: "a", SecurityContext: nil},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=nil, enable field error list",
@@ -110,7 +110,7 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "containers runAsUser=0",
@@ -161,7 +161,7 @@ func TestRunAsUser(t *testing.T) {
 					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(4)}},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "containers runAsUser=non-zero, enable field error list",
@@ -176,15 +176,15 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				HostUsers: utilpointer.Bool(false),
 			}},
-			expectAllow:                              true,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  true,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers, enable field error list",
@@ -194,8 +194,8 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow:                              true,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  true,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled with HostUsers",
@@ -206,9 +206,10 @@ func TestRunAsUser(t *testing.T) {
 				},
 				HostUsers: utilpointer.Bool(true),
 			}},
-			expectReason:                             `runAsUser=0`,
-			expectDetail:                             `pod must not set runAsUser=0`,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  false,
+			expectReason:   `runAsUser=0`,
+			expectDetail:   `pod must not set runAsUser=0`,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled with HostUsers, enable field error list",
@@ -227,25 +228,22 @@ func TestRunAsUser(t *testing.T) {
 			expectErrList: field.ErrorList{
 				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.runAsUser", BadValue: 0},
 			},
-			enableUserNamespacesPodSecurityStandards: true,
+			relaxForUserNS: true,
 		},
 	}
 
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.enableUserNamespacesPodSecurityStandards {
+			if tc.relaxForUserNS {
 				RelaxPolicyForUserNamespacePods(true)
+				t.Cleanup(func() {
+					RelaxPolicyForUserNamespacePods(false)
+				})
 			}
 			result := runAsUserV1Dot23(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
-			if tc.expectAllow {
-				if !result.Allowed {
-					t.Fatalf("expected to be allowed, disallowed: %s, %s", result.ForbiddenReason, result.ForbiddenDetail)
-				}
-				return
-			}
-			if result.Allowed {
-				t.Fatal("expected disallowed")
+			if result.Allowed != tc.expectAllowed {
+				t.Fatalf("expected Allowed to be %v was %v", tc.expectAllowed, result.Allowed)
 			}
 			if e, a := tc.expectReason, result.ForbiddenReason; e != a {
 				t.Errorf("expected\n%s\ngot\n%s", e, a)
