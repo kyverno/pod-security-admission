@@ -65,18 +65,18 @@ func CheckSysctls() Check {
 		Versions: []VersionedCheck{
 			{
 				MinimumVersion: api.MajorMinorVersion(1, 0),
-				CheckPod:       sysctlsV1Dot0,
+				CheckPod:       withOptions(sysctlsV1Dot0),
 			},
 			{
 				MinimumVersion: api.MajorMinorVersion(1, 27),
-				CheckPod:       sysctlsV1Dot27,
+				CheckPod:       withOptions(sysctlsV1Dot27),
 			}, {
 				MinimumVersion: api.MajorMinorVersion(1, 29),
-				CheckPod:       sysctlsV1Dot29,
+				CheckPod:       withOptions(sysctlsV1Dot29),
 			},
 			{
 				MinimumVersion: api.MajorMinorVersion(1, 32),
-				CheckPod:       sysctlsV1Dot32,
+				CheckPod:       withOptions(sysctlsV1Dot32),
 			},
 		},
 	}
@@ -105,38 +105,43 @@ var (
 	))
 )
 
-func sysctlsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec) CheckResult {
-	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot0)
+func sysctlsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot0, opts)
 }
 
-func sysctlsV1Dot27(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec) CheckResult {
-	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot27)
+func sysctlsV1Dot27(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot27, opts)
 }
 
-func sysctlsV1Dot29(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec) CheckResult {
-	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot29)
+func sysctlsV1Dot29(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot29, opts)
 }
 
-func sysctlsV1Dot32(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec) CheckResult {
-	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot32)
+func sysctlsV1Dot32(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot32, opts)
 }
 
-func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, sysctls_allowed_set sets.String) CheckResult {
-	var forbiddenSysctls []string
+func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, sysctls_allowed_set sets.String, opts options) CheckResult {
+	forbiddenSysctls := NewViolations(opts.withFieldErrors)
 
 	if podSpec.SecurityContext != nil {
-		for _, sysctl := range podSpec.SecurityContext.Sysctls {
+		for i, sysctl := range podSpec.SecurityContext.Sysctls {
 			if !sysctls_allowed_set.Has(sysctl.Name) {
-				forbiddenSysctls = append(forbiddenSysctls, sysctl.Name)
+				if opts.withFieldErrors {
+					forbiddenSysctls.Add(sysctl.Name, withBadValue(forbidden(sysctlsPath.Index(i).Child("name")), sysctl.Name))
+				} else {
+					forbiddenSysctls.Add(sysctl.Name)
+				}
 			}
 		}
 	}
 
-	if len(forbiddenSysctls) > 0 {
+	if !forbiddenSysctls.Empty() {
 		return CheckResult{
 			Allowed:         false,
 			ForbiddenReason: "forbidden sysctls",
-			ForbiddenDetail: strings.Join(forbiddenSysctls, ", "),
+			ForbiddenDetail: strings.Join(forbiddenSysctls.Data(), ", "),
+			ErrList:         forbiddenSysctls.Errs(),
 		}
 	}
 	return CheckResult{Allowed: true}

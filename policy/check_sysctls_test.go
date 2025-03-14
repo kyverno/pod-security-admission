@@ -20,15 +20,21 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestSysctls(t *testing.T) {
 	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		allowed      bool
-		expectReason string
-		expectDetail string
+		name          string
+		pod           *corev1.Pod
+		opts          options
+		allowed       bool
+		expectReason  string
+		expectDetail  string
+		expectErrList field.ErrorList
 	}{
 		{
 			name: "forbidden sysctls",
@@ -40,6 +46,24 @@ func TestSysctls(t *testing.T) {
 			allowed:      false,
 			expectReason: `forbidden sysctls`,
 			expectDetail: `a, b`,
+		},
+		{
+			name: "forbidden sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "a"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[1].name", BadValue: "b"},
+			},
 		},
 		{
 			name: "new supported sysctls not supported: net.ipv4.ip_local_reserved_ports",
@@ -53,6 +77,23 @@ func TestSysctls(t *testing.T) {
 			expectDetail: `net.ipv4.ip_local_reserved_ports`,
 		},
 		{
+			name: "new supported sysctls not supported: net.ipv4.ip_local_reserved_ports, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.ip_local_reserved_ports", Value: "1024-4999"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.ip_local_reserved_ports`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.ip_local_reserved_ports"},
+			},
+		},
+		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_time",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
@@ -62,6 +103,23 @@ func TestSysctls(t *testing.T) {
 			allowed:      false,
 			expectReason: `forbidden sysctls`,
 			expectDetail: `net.ipv4.tcp_keepalive_time`,
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_time, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_time", Value: "7200"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_keepalive_time`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_keepalive_time"},
+			},
 		},
 		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_fin_timeout",
@@ -75,6 +133,23 @@ func TestSysctls(t *testing.T) {
 			expectDetail: `net.ipv4.tcp_fin_timeout`,
 		},
 		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_fin_timeout, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_fin_timeout", Value: "60"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_fin_timeout`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_fin_timeout"},
+			},
+		},
+		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_intvl",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
@@ -84,6 +159,23 @@ func TestSysctls(t *testing.T) {
 			allowed:      false,
 			expectReason: `forbidden sysctls`,
 			expectDetail: `net.ipv4.tcp_keepalive_intvl`,
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_intvl, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_intvl", Value: "75"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_keepalive_intvl`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_keepalive_intvl"},
+			},
 		},
 		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_probes",
@@ -97,6 +189,23 @@ func TestSysctls(t *testing.T) {
 			expectDetail: `net.ipv4.tcp_keepalive_probes`,
 		},
 		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_keepalive_probes, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_probes", Value: "9"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_keepalive_probes`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_keepalive_probes"},
+			},
+		},
+		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_rmem",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
@@ -106,6 +215,23 @@ func TestSysctls(t *testing.T) {
 			allowed:      false,
 			expectReason: `forbidden sysctls`,
 			expectDetail: `net.ipv4.tcp_rmem`,
+		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_rmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_rmem`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_rmem"},
+			},
 		},
 		{
 			name: "new supported sysctls not supported: net.ipv4.tcp_wmem",
@@ -118,11 +244,29 @@ func TestSysctls(t *testing.T) {
 			expectReason: `forbidden sysctls`,
 			expectDetail: `net.ipv4.tcp_wmem`,
 		},
+		{
+			name: "new supported sysctls not supported: net.ipv4.tcp_wmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `net.ipv4.tcp_wmem`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "net.ipv4.tcp_wmem"},
+			},
+		},
 	}
 
+	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := sysctlsV1Dot0(&tc.pod.ObjectMeta, &tc.pod.Spec)
+			result := sysctlsV1Dot0(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
 			if !tc.allowed {
 				if result.Allowed {
 					t.Fatal("expected disallowed")
@@ -132,6 +276,11 @@ func TestSysctls(t *testing.T) {
 				}
 				if e, a := tc.expectDetail, result.ForbiddenDetail; e != a {
 					t.Errorf("expected\n%s\ngot\n%s", e, a)
+				}
+				if result.ErrList != nil {
+					if diff := cmp.Diff(tc.expectErrList, *result.ErrList, cmpOpts...); diff != "" {
+						t.Errorf("unexpected field errors (-want,+got):\n%s", diff)
+					}
 				}
 			} else if !result.Allowed {
 				t.Fatal("expected allowed")
@@ -142,11 +291,13 @@ func TestSysctls(t *testing.T) {
 
 func TestSysctls_1_27(t *testing.T) {
 	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		allowed      bool
-		expectReason string
-		expectDetail string
+		name          string
+		pod           *corev1.Pod
+		opts          options
+		allowed       bool
+		expectReason  string
+		expectDetail  string
+		expectErrList field.ErrorList
 	}{
 		{
 			name: "forbidden sysctls",
@@ -158,6 +309,24 @@ func TestSysctls_1_27(t *testing.T) {
 			allowed:      false,
 			expectReason: `forbidden sysctls`,
 			expectDetail: `a, b`,
+		},
+		{
+			name: "forbidden sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "a"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[1].name", BadValue: "b"},
+			},
 		},
 		{
 			name: "new supported sysctls",
@@ -168,11 +337,24 @@ func TestSysctls_1_27(t *testing.T) {
 			}},
 			allowed: true,
 		},
+		{
+			name: "new supported sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.ip_local_reserved_ports", Value: "1024-4999"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
 	}
 
+	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := sysctlsV1Dot27(&tc.pod.ObjectMeta, &tc.pod.Spec)
+			result := sysctlsV1Dot27(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
 			if !tc.allowed {
 				if result.Allowed {
 					t.Fatal("expected disallowed")
@@ -183,6 +365,11 @@ func TestSysctls_1_27(t *testing.T) {
 				if e, a := tc.expectDetail, result.ForbiddenDetail; e != a {
 					t.Errorf("expected\n%s\ngot\n%s", e, a)
 				}
+				if result.ErrList != nil {
+					if diff := cmp.Diff(tc.expectErrList, *result.ErrList, cmpOpts...); diff != "" {
+						t.Errorf("unexpected field errors (-want,+got):\n%s", diff)
+					}
+				}
 			} else if !result.Allowed {
 				t.Fatal("expected allowed")
 			}
@@ -192,11 +379,13 @@ func TestSysctls_1_27(t *testing.T) {
 
 func TestSysctls_1_29(t *testing.T) {
 	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		allowed      bool
-		expectReason string
-		expectDetail string
+		name          string
+		pod           *corev1.Pod
+		opts          options
+		allowed       bool
+		expectReason  string
+		expectDetail  string
+		expectErrList field.ErrorList
 	}{
 		{
 			name: "forbidden sysctls",
@@ -210,12 +399,42 @@ func TestSysctls_1_29(t *testing.T) {
 			expectDetail: `a, b`,
 		},
 		{
+			name: "forbidden sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "a"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[1].name", BadValue: "b"},
+			},
+		},
+		{
 			name: "new supported sysctls: net.ipv4.tcp_keepalive_time",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
 					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_time", Value: "7200"}},
 				},
 			}},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_keepalive_time, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_time", Value: "7200"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			allowed: true,
 		},
 		{
@@ -228,12 +447,36 @@ func TestSysctls_1_29(t *testing.T) {
 			allowed: true,
 		},
 		{
+			name: "new supported sysctls: net.ipv4.tcp_fin_timeout, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_fin_timeout", Value: "60"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
+		{
 			name: "new supported sysctls: net.ipv4.tcp_keepalive_intvl",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
 					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_intvl", Value: "75"}},
 				},
 			}},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_keepalive_intvl, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_intvl", Value: "75"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			allowed: true,
 		},
 		{
@@ -245,11 +488,24 @@ func TestSysctls_1_29(t *testing.T) {
 			}},
 			allowed: true,
 		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_keepalive_probes, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_keepalive_probes", Value: "9"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
 	}
 
+	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := sysctlsV1Dot29(&tc.pod.ObjectMeta, &tc.pod.Spec)
+			result := sysctlsV1Dot29(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
 			if !tc.allowed {
 				if result.Allowed {
 					t.Fatal("expected disallowed")
@@ -260,6 +516,11 @@ func TestSysctls_1_29(t *testing.T) {
 				if e, a := tc.expectDetail, result.ForbiddenDetail; e != a {
 					t.Errorf("expected\n%s\ngot\n%s", e, a)
 				}
+				if result.ErrList != nil {
+					if diff := cmp.Diff(tc.expectErrList, *result.ErrList, cmpOpts...); diff != "" {
+						t.Errorf("unexpected field errors (-want,+got):\n%s", diff)
+					}
+				}
 			} else if !result.Allowed {
 				t.Fatal("expected allowed")
 			}
@@ -269,11 +530,13 @@ func TestSysctls_1_29(t *testing.T) {
 
 func TestSysctls_1_32(t *testing.T) {
 	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		allowed      bool
-		expectReason string
-		expectDetail string
+		name          string
+		pod           *corev1.Pod
+		opts          options
+		allowed       bool
+		expectReason  string
+		expectDetail  string
+		expectErrList field.ErrorList
 	}{
 		{
 			name: "forbidden sysctls",
@@ -287,12 +550,42 @@ func TestSysctls_1_32(t *testing.T) {
 			expectDetail: `a, b`,
 		},
 		{
+			name: "forbidden sysctls, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "a"}, {Name: "b"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed:      false,
+			expectReason: `forbidden sysctls`,
+			expectDetail: `a, b`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[0].name", BadValue: "a"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.sysctls[1].name", BadValue: "b"},
+			},
+		},
+		{
 			name: "new supported sysctls: net.ipv4.tcp_rmem",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
 					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
 				},
 			}},
+			allowed: true,
+		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_rmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_rmem", Value: "4096 87380 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			allowed: true,
 		},
 		{
@@ -304,11 +597,23 @@ func TestSysctls_1_32(t *testing.T) {
 			}},
 			allowed: true,
 		},
+		{
+			name: "new supported sysctls: net.ipv4.tcp_wmem, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					Sysctls: []corev1.Sysctl{{Name: "net.ipv4.tcp_wmem", Value: "4096 65536 16777216"}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			allowed: true,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := sysctlsV1Dot32(&tc.pod.ObjectMeta, &tc.pod.Spec)
+			result := sysctlsV1Dot32(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
 			if !tc.allowed {
 				if result.Allowed {
 					t.Fatal("expected disallowed")
