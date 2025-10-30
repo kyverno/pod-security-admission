@@ -19,12 +19,11 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilpointer "k8s.io/utils/pointer"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/utils/ptr"
 )
 
@@ -54,6 +53,32 @@ func TestWindowsHostProcess(t *testing.T) {
 			}},
 			expectReason: `hostProcess`,
 			expectDetail: `pod and containers "e", "f" must not set securityContext.windowsOptions.hostProcess=true`,
+		},
+		{
+			name: "host process, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					WindowsOptions: &corev1.WindowsSecurityContextOptions{HostProcess: utilpointer.Bool(true)},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{WindowsOptions: &corev1.WindowsSecurityContextOptions{}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{WindowsOptions: &corev1.WindowsSecurityContextOptions{HostProcess: utilpointer.Bool(false)}}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{WindowsOptions: &corev1.WindowsSecurityContextOptions{HostProcess: utilpointer.Bool(true)}}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{WindowsOptions: &corev1.WindowsSecurityContextOptions{HostProcess: utilpointer.Bool(true)}}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `hostProcess`,
+			expectDetail: `pod and containers "e", "f" must not set securityContext.windowsOptions.hostProcess=true`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.windowsOptions.hostProcess", BadValue: true},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.windowsOptions.hostProcess", BadValue: true},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[5].securityContext.windowsOptions.hostProcess", BadValue: true},
+			},
 		},
 		{
 			name: "host process, enable field error list",

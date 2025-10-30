@@ -96,6 +96,27 @@ func TestProcMount(t *testing.T) {
 				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.procMount", BadValue: "other"},
 			},
 		},
+		{
+			name: "procMount, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{ProcMount: &defaultValue}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{ProcMount: &unmaskedValue}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{ProcMount: &otherValue}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `procMount`,
+			expectDetail: `containers "d", "e" must not set securityContext.procMount to "Unmasked", "other"`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.procMount", BadValue: "Unmasked"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.procMount", BadValue: "other"},
+			},
+		},
 	}
 
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}

@@ -140,7 +140,7 @@ func TestCheckAppArmor_Forbidden(t *testing.T) {
 			expectReason: "forbidden AppArmor profile",
 			expectDetail: `pod must not set AppArmor profile type to "Unconfined"`,
 			expectErrList: field.ErrorList{
-				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.appArmorProfile.type", BadValue: corev1.AppArmorProfileTypeUnconfined},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.appArmorProfile.type", BadValue: "Unconfined"},
 			},
 		},
 		{
@@ -190,7 +190,7 @@ func TestCheckAppArmor_Forbidden(t *testing.T) {
 			expectReason: "forbidden AppArmor profile",
 			expectDetail: `container "foo" must not set AppArmor profile type to "Unconfined"`,
 			expectErrList: field.ErrorList{
-				{Type: field.ErrorTypeForbidden, Field: "spec.containers[0].securityContext.appArmorProfile.type", BadValue: corev1.AppArmorProfileTypeUnconfined},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[0].securityContext.appArmorProfile.type", BadValue: "Unconfined"},
 			},
 		},
 		{
@@ -246,7 +246,7 @@ func TestCheckAppArmor_Forbidden(t *testing.T) {
 			expectReason: "forbidden AppArmor profile",
 			expectDetail: `container "bar" must not set AppArmor profile type to "Unconfined"`,
 			expectErrList: field.ErrorList{
-				{Type: field.ErrorTypeForbidden, Field: "spec.initContainers[0].securityContext.appArmorProfile.type", BadValue: corev1.AppArmorProfileTypeUnconfined},
+				{Type: field.ErrorTypeForbidden, Field: "spec.initContainers[0].securityContext.appArmorProfile.type", BadValue: "Unconfined"},
 			},
 		},
 		{

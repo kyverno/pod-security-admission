@@ -106,21 +106,22 @@ var (
 )
 
 func sysctlsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
-	return sysctls(podMetadata, podSpec, opts, sysctlsAllowedV1Dot0)
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot0, opts)
 }
 
 func sysctlsV1Dot27(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
-	return sysctls(podMetadata, podSpec, opts, sysctlsAllowedV1Dot27)
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot27, opts)
 }
 
 func sysctlsV1Dot29(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
-	return sysctls(podMetadata, podSpec, opts, sysctlsAllowedV1Dot29)
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot29, opts)
 }
 
 func sysctlsV1Dot32(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
-	return sysctls(podMetadata, podSpec, opts, sysctlsAllowedV1Dot32)
+	return sysctls(podMetadata, podSpec, sysctlsAllowedV1Dot32, opts)
 }
-func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options, sysctlsAllowedSet sets.Set[string]) CheckResult {
+
+func sysctls(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, sysctlsAllowedSet sets.Set[string], opts options) CheckResult {
 	forbiddenSysctls := NewViolations(opts.withFieldErrors)
 
 	if podSpec.SecurityContext != nil {

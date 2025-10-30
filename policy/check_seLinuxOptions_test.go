@@ -118,6 +118,51 @@ func TestSELinuxOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid pod and containers, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "foo",
+						User: "bar",
+						Role: "baz",
+					},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_t",
+					}}},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_init_t",
+					}}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_kvm_t",
+					}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "bar",
+					}}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						User: "bar",
+					}}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Role: "baz",
+					}}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `seLinuxOptions`,
+			expectDetail: `pod and containers "d", "e", "f" set forbidden securityContext.seLinuxOptions: types "bar", "foo"; user may not be set; role may not be set`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.type", BadValue: "foo"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.role", BadValue: "baz"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.seLinuxOptions.type", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[5].securityContext.seLinuxOptions.role", BadValue: "baz"},
+			},
+		},
+		{
 			name: "invalid pod",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				SecurityContext: &corev1.PodSecurityContext{
@@ -210,6 +255,44 @@ func TestSELinuxOptions(t *testing.T) {
 			}},
 			expectReason: `seLinuxOptions`,
 			expectDetail: `containers "e", "f", "g" set forbidden securityContext.seLinuxOptions: type "bar"; user may not be set; role may not be set`,
+		},
+		{
+			name: "invalid containers, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_t",
+					}}},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_init_t",
+					}}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_kvm_t",
+					}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "bar",
+					}}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						User: "bar",
+					}}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Role: "baz",
+					}}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `seLinuxOptions`,
+			expectDetail: `containers "d", "e", "f" set forbidden securityContext.seLinuxOptions: type "bar"; user may not be set; role may not be set`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.seLinuxOptions.type", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[5].securityContext.seLinuxOptions.role", BadValue: "baz"},
+			},
 		},
 		{
 			name: "invalid containers, enable field error list",
