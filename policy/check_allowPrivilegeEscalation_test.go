@@ -19,12 +19,12 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilpointer "k8s.io/utils/pointer"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 )
 
 func TestAllowPrivilegeEscalation_1_25(t *testing.T) {
@@ -43,8 +43,8 @@ func TestAllowPrivilegeEscalation_1_25(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a"},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(false)}},
 				}}},
 			expectReason: `allowPrivilegeEscalation != false`,
 			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,
@@ -159,8 +159,8 @@ func TestAllowPrivilegeEscalation_1_8(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a"},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(false)}},
 				}}},
 			expectReason: `allowPrivilegeEscalation != false`,
 			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,

@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 )
 
 func TestRunAsUser(t *testing.T) {
@@ -32,16 +33,17 @@ func TestRunAsUser(t *testing.T) {
 		name                                     string
 		pod                                      *corev1.Pod
 		opts                                     options
-		expectAllow                              bool
+		expectAllowed                            bool
 		expectReason                             string
 		expectDetail                             string
 		expectErrList                            field.ErrorList
+		relaxForUserNS                           bool
 		enableUserNamespacesPodSecurityStandards bool
 	}{
 		{
 			name: "pod runAsUser=0",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsUser: utilpointer.Int64(0)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsUser: ptr.To[int64](0)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 				},
@@ -69,12 +71,12 @@ func TestRunAsUser(t *testing.T) {
 		{
 			name: "pod runAsUser=non-zero",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsUser: utilpointer.Int64(1000)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsUser: ptr.To[int64](1000)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=non-zero, enable field error list",
@@ -87,7 +89,7 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=nil",
@@ -97,7 +99,7 @@ func TestRunAsUser(t *testing.T) {
 					{Name: "a", SecurityContext: nil},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "pod runAsUser=nil, enable field error list",
@@ -110,19 +112,19 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "containers runAsUser=0",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsUser: utilpointer.Int64(1000)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsUser: ptr.To[int64](1000)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(0)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(0)}},
-					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(1)}},
-					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(1)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](0)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](0)}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](1)}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](1)}},
 				},
 			}},
 			expectReason: `runAsUser=0`,
@@ -155,13 +157,13 @@ func TestRunAsUser(t *testing.T) {
 			name: "containers runAsUser=non-zero",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
-					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(1)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(2)}},
-					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(3)}},
-					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsUser: utilpointer.Int64(4)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](1)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](2)}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](3)}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To[int64](4)}},
 				},
 			}},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "containers runAsUser=non-zero, enable field error list",
@@ -176,15 +178,15 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow: true,
+			expectAllowed: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				HostUsers: utilpointer.Bool(false),
+				HostUsers: ptr.To(false),
 			}},
-			expectAllow:                              true,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  true,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers, enable field error list",
@@ -194,21 +196,22 @@ func TestRunAsUser(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			expectAllow:                              true,
+			expectAllowed:                            true,
 			enableUserNamespacesPodSecurityStandards: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled with HostUsers",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsUser: utilpointer.Int64(0)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsUser: ptr.To[int64](0)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 				},
-				HostUsers: utilpointer.Bool(true),
+				HostUsers: ptr.To(true),
 			}},
-			expectReason:                             `runAsUser=0`,
-			expectDetail:                             `pod must not set runAsUser=0`,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  false,
+			expectReason:   `runAsUser=0`,
+			expectDetail:   `pod must not set runAsUser=0`,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled with HostUsers, enable field error list",
@@ -234,18 +237,16 @@ func TestRunAsUser(t *testing.T) {
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.enableUserNamespacesPodSecurityStandards {
+			if tc.relaxForUserNS {
 				RelaxPolicyForUserNamespacePods(true)
+				t.Cleanup(func() {
+					RelaxPolicyForUserNamespacePods(false)
+				})
 			}
 			result := runAsUserV1Dot23(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
-			if tc.expectAllow {
-				if !result.Allowed {
-					t.Fatalf("expected to be allowed, disallowed: %s, %s", result.ForbiddenReason, result.ForbiddenDetail)
-				}
-				return
-			}
-			if result.Allowed {
-				t.Fatal("expected disallowed")
+			if result.Allowed != tc.expectAllowed {
+				t.Fatalf("expected Allowed to be %v was %v", tc.expectAllowed, result.Allowed)
+				t.Fatalf("expected to be allowed, disallowed: %s, %s", result.ForbiddenReason, result.ForbiddenDetail)
 			}
 			if e, a := tc.expectReason, result.ForbiddenReason; e != a {
 				t.Errorf("expected\n%s\ngot\n%s", e, a)

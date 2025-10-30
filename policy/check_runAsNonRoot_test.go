@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 )
 
 func TestRunAsNonRoot(t *testing.T) {
@@ -35,7 +36,8 @@ func TestRunAsNonRoot(t *testing.T) {
 		expectReason                             string
 		expectDetail                             string
 		expectErrList                            field.ErrorList
-		allowed                                  bool
+		expectAllowed                            bool
+		relaxForUserNS                           bool
 		enableUserNamespacesPodSecurityStandards bool
 	}{
 		{
@@ -67,7 +69,7 @@ func TestRunAsNonRoot(t *testing.T) {
 		{
 			name: "pod runAsNonRoot=false",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: utilpointer.Bool(false)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: ptr.To(false)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 				},
@@ -95,14 +97,14 @@ func TestRunAsNonRoot(t *testing.T) {
 		{
 			name: "containers runAsNonRoot=false",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: utilpointer.Bool(true)},
+				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: ptr.To(true)},
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(false)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(false)}},
-					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(true)}},
-					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(true)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(false)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(false)}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(true)}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(true)}},
 				},
 			}},
 			expectReason: `runAsNonRoot != true`,
@@ -137,8 +139,8 @@ func TestRunAsNonRoot(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(true)}},
-					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: utilpointer.Bool(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(true)}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(true)}},
 				},
 			}},
 			expectReason: `runAsNonRoot != true`,
@@ -167,10 +169,10 @@ func TestRunAsNonRoot(t *testing.T) {
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers",
 			pod: &corev1.Pod{Spec: corev1.PodSpec{
-				HostUsers: utilpointer.Bool(false),
+				HostUsers: ptr.To(false),
 			}},
-			allowed:                                  true,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectAllowed:  true,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled without HostUsers, enable field error list",
@@ -180,7 +182,7 @@ func TestRunAsNonRoot(t *testing.T) {
 			opts: options{
 				withFieldErrors: true,
 			},
-			allowed:                                  true,
+			expectAllowed:                            true,
 			enableUserNamespacesPodSecurityStandards: true,
 		},
 		{
@@ -189,12 +191,12 @@ func TestRunAsNonRoot(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a"},
 				},
-				HostUsers: utilpointer.Bool(true),
+				HostUsers: ptr.To(true),
 			}},
-			expectReason:                             `runAsNonRoot != true`,
-			expectDetail:                             `pod or container "a" must set securityContext.runAsNonRoot=true`,
-			allowed:                                  false,
-			enableUserNamespacesPodSecurityStandards: true,
+			expectReason:   `runAsNonRoot != true`,
+			expectDetail:   `pod or container "a" must set securityContext.runAsNonRoot=true`,
+			expectAllowed:  false,
+			relaxForUserNS: true,
 		},
 		{
 			name: "UserNamespacesPodSecurityStandards enabled with HostUsers, enable field error list",
@@ -212,7 +214,7 @@ func TestRunAsNonRoot(t *testing.T) {
 			expectErrList: field.ErrorList{
 				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.runAsNonRoot", BadValue: ""},
 			},
-			allowed:                                  false,
+			expectAllowed:                            false,
 			enableUserNamespacesPodSecurityStandards: true,
 		},
 	}
@@ -220,12 +222,16 @@ func TestRunAsNonRoot(t *testing.T) {
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.enableUserNamespacesPodSecurityStandards {
+			if tc.relaxForUserNS {
 				RelaxPolicyForUserNamespacePods(true)
+				t.Cleanup(func() {
+					RelaxPolicyForUserNamespacePods(false)
+				})
 			}
+
 			result := runAsNonRootV1Dot0(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
-			if result.Allowed && !tc.allowed {
-				t.Fatal("expected disallowed")
+			if result.Allowed != tc.expectAllowed {
+				t.Fatalf("expected Allowed to be %v was %v", tc.expectAllowed, result.Allowed)
 			}
 			if e, a := tc.expectReason, result.ForbiddenReason; e != a {
 				t.Errorf("expected\n%s\ngot\n%s", e, a)
