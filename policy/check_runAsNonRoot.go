@@ -119,41 +119,27 @@ func runAsNonRootV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec,
 			explicitlyErrs...,
 		)
 	}
-
-	var details []string
-	var errorList field.ErrorList
 	// pod or containers explicitly set runAsNonRoot=false
 	if !badSetters.Empty() {
-		details = append(details, fmt.Sprintf(
-			"%s must not set securityContext.runAsNonRoot=false",
-			strings.Join(badSetters.Data(), " and "),
-		))
-		if badSetters.Errs() != nil {
-			errorList = append(errorList, *badSetters.Errs()...)
+		return CheckResult{
+			Allowed:         false,
+			ForbiddenReason: "runAsNonRoot != true",
+			ForbiddenDetail: fmt.Sprintf("%s must not set securityContext.runAsNonRoot=false", strings.Join(badSetters.Data(), " and ")),
+			ErrList:         badSetters.Errs(),
 		}
 	}
 
 	// pod didn't set runAsNonRoot and not all containers opted into runAsNonRoot
 	if !implicitlyBadContainers.Empty() {
-		details = append(details, fmt.Sprintf(
-			"pod or %s %s must set securityContext.runAsNonRoot=true",
-			pluralize("container", "containers", implicitlyBadContainers.Len()),
-			joinQuote(implicitlyBadContainers.Data()),
-		))
-		if implicitlyBadContainers.Errs() != nil {
-			errorList = append(errorList, *implicitlyBadContainers.Errs()...)
-		}
-	}
-
-	forbiddenDetails := strings.Join(details, "\n")
-
-	// pod or containers explicitly set runAsNonRoot=false
-	if !badSetters.Empty() || !implicitlyBadContainers.Empty() {
 		return CheckResult{
 			Allowed:         false,
 			ForbiddenReason: "runAsNonRoot != true",
-			ForbiddenDetail: forbiddenDetails,
-			ErrList:         &errorList,
+			ForbiddenDetail: fmt.Sprintf(
+				"pod or %s %s must set securityContext.runAsNonRoot=true",
+				pluralize("container", "containers", implicitlyBadContainers.Len()),
+				joinQuote(implicitlyBadContainers.Data()),
+			),
+			ErrList: implicitlyBadContainers.Errs(),
 		}
 	}
 

@@ -56,6 +56,43 @@ func TestSELinuxOptions(t *testing.T) {
 						Type: "container_kvm_t",
 					}}},
 					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_engine_t",
+					}}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "bar",
+					}}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						User: "bar",
+					}}},
+					{Name: "g", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Role: "baz",
+					}}},
+				},
+			}},
+			expectReason: `seLinuxOptions`,
+			expectDetail: `pod and containers "e", "f", "g" set forbidden securityContext.seLinuxOptions: types "bar", "foo"; user may not be set; role may not be set`,
+		},
+		{
+			name: "invalid pod and containers, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "foo",
+						User: "bar",
+						Role: "baz",
+					},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_t",
+					}}},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_init_t",
+					}}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_kvm_t",
+					}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
 						Type: "bar",
 					}}},
 					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
@@ -66,8 +103,19 @@ func TestSELinuxOptions(t *testing.T) {
 					}}},
 				},
 			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			expectReason: `seLinuxOptions`,
 			expectDetail: `pod and containers "d", "e", "f" set forbidden securityContext.seLinuxOptions: types "bar", "foo"; user may not be set; role may not be set`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.type", BadValue: "foo"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.securityContext.seLinuxOptions.role", BadValue: "baz"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.seLinuxOptions.type", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[5].securityContext.seLinuxOptions.role", BadValue: "baz"},
+			},
 		},
 		{
 			name: "invalid pod and containers, enable field error list",
@@ -134,6 +182,9 @@ func TestSELinuxOptions(t *testing.T) {
 					{Name: "c", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
 						Type: "container_kvm_t",
 					}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_engine_t",
+					}}},
 				},
 			}},
 			expectReason: `seLinuxOptions`,
@@ -189,6 +240,39 @@ func TestSELinuxOptions(t *testing.T) {
 						Type: "container_kvm_t",
 					}}},
 					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_engine_t",
+					}}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "bar",
+					}}},
+					{Name: "f", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						User: "bar",
+					}}},
+					{Name: "g", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Role: "baz",
+					}}},
+				},
+			}},
+			expectReason: `seLinuxOptions`,
+			expectDetail: `containers "e", "f", "g" set forbidden securityContext.seLinuxOptions: type "bar"; user may not be set; role may not be set`,
+		},
+		{
+			name: "invalid containers, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{
+					SELinuxOptions: &corev1.SELinuxOptions{},
+				},
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_t",
+					}}},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_init_t",
+					}}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
+						Type: "container_kvm_t",
+					}}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
 						Type: "bar",
 					}}},
 					{Name: "e", SecurityContext: &corev1.SecurityContext{SELinuxOptions: &corev1.SELinuxOptions{
@@ -199,8 +283,16 @@ func TestSELinuxOptions(t *testing.T) {
 					}}},
 				},
 			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			expectReason: `seLinuxOptions`,
 			expectDetail: `containers "d", "e", "f" set forbidden securityContext.seLinuxOptions: type "bar"; user may not be set; role may not be set`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.seLinuxOptions.type", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.seLinuxOptions.user", BadValue: "bar"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[5].securityContext.seLinuxOptions.role", BadValue: "baz"},
+			},
 		},
 		{
 			name: "invalid containers, enable field error list",
@@ -335,7 +427,7 @@ func TestSELinuxOptions(t *testing.T) {
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := seLinuxOptionsV1Dot0(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
+			result := seLinuxOptions1_31(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
 			if result.Allowed {
 				t.Fatal("expected disallowed")
 			}

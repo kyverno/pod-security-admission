@@ -33,12 +33,14 @@ func TestProcMount(t *testing.T) {
 
 	hostUsers := false
 	tests := []struct {
-		name          string
-		pod           *corev1.Pod
-		opts          options
-		expectReason  string
-		expectDetail  string
-		expectErrList field.ErrorList
+		name           string
+		pod            *corev1.Pod
+		opts           options
+		expectReason   string
+		expectDetail   string
+		expectAllowed  bool
+		relaxForUserNS bool
+		expectErrList  field.ErrorList
 	}{
 		{
 			name: "procMount",
@@ -52,8 +54,47 @@ func TestProcMount(t *testing.T) {
 				},
 				HostUsers: &hostUsers,
 			}},
+			expectReason:  `procMount`,
+			expectAllowed: false,
+			expectDetail:  `containers "d", "e" must not set securityContext.procMount to "Unmasked", "other"`,
+		},
+		{
+			name: "procMount",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{ProcMount: &defaultValue}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{ProcMount: &unmaskedValue}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{ProcMount: &otherValue}},
+				},
+				HostUsers: &hostUsers,
+			}},
+			expectReason:   "",
+			expectDetail:   "",
+			expectAllowed:  true,
+			relaxForUserNS: true,
+		},
+		{
+			name: "procMount, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{ProcMount: &defaultValue}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{ProcMount: &unmaskedValue}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{ProcMount: &otherValue}},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			expectReason: `procMount`,
 			expectDetail: `containers "d", "e" must not set securityContext.procMount to "Unmasked", "other"`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.procMount", BadValue: "Unmasked"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.procMount", BadValue: "other"},
+			},
 		},
 		{
 			name: "procMount, enable field error list",
@@ -81,9 +122,15 @@ func TestProcMount(t *testing.T) {
 	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := procMountV1Dot0(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
-			if result.Allowed {
-				t.Fatal("expected disallowed")
+			if tc.relaxForUserNS {
+				RelaxPolicyForUserNamespacePods(true)
+				t.Cleanup(func() {
+					RelaxPolicyForUserNamespacePods(false)
+				})
+			}
+			result := procMount_1_0(&tc.pod.ObjectMeta, &tc.pod.Spec, tc.opts)
+			if result.Allowed != tc.expectAllowed {
+				t.Fatalf("expected Allowed to be %v was %v", tc.expectAllowed, result.Allowed)
 			}
 			if e, a := tc.expectReason, result.ForbiddenReason; e != a {
 				t.Errorf("expected\n%s\ngot\n%s", e, a)

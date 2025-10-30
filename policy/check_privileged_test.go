@@ -19,12 +19,12 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilpointer "k8s.io/utils/pointer"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 )
 
 func TestPrivileged(t *testing.T) {
@@ -42,13 +42,34 @@ func TestPrivileged(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a", SecurityContext: nil},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{Privileged: ptr.To(false)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{Privileged: ptr.To(true)}},
+					{Name: "e", SecurityContext: &corev1.SecurityContext{Privileged: ptr.To(true)}},
+				},
+			}},
+			expectReason: `privileged`,
+			expectDetail: `containers "d", "e" must not set securityContext.privileged=true`,
+		},
+		{
+			name: "privileged, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a", SecurityContext: nil},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{}},
 					{Name: "c", SecurityContext: &corev1.SecurityContext{Privileged: utilpointer.Bool(false)}},
 					{Name: "d", SecurityContext: &corev1.SecurityContext{Privileged: utilpointer.Bool(true)}},
 					{Name: "e", SecurityContext: &corev1.SecurityContext{Privileged: utilpointer.Bool(true)}},
 				},
 			}},
+			opts: options{
+				withFieldErrors: true,
+			},
 			expectReason: `privileged`,
 			expectDetail: `containers "d", "e" must not set securityContext.privileged=true`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[3].securityContext.privileged", BadValue: true},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[4].securityContext.privileged", BadValue: true},
+			},
 		},
 		{
 			name: "privileged, enable field error list",

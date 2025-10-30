@@ -19,12 +19,12 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilpointer "k8s.io/utils/pointer"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 )
 
 func TestAllowPrivilegeEscalation_1_25(t *testing.T) {
@@ -43,12 +43,33 @@ func TestAllowPrivilegeEscalation_1_25(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a"},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(false)}},
 				}}},
 			expectReason: `allowPrivilegeEscalation != false`,
 			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,
 			allowed:      false,
+		},
+		{
+			name: "multiple containers, enable field error list",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a"},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+				}}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `allowPrivilegeEscalation != false`,
+			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,
+			allowed:      false,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.allowPrivilegeEscalation", BadValue: ""},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[1].securityContext.allowPrivilegeEscalation", BadValue: "nil"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[2].securityContext.allowPrivilegeEscalation", BadValue: true},
+			},
 		},
 		{
 			name: "multiple containers, enable field error list",
@@ -159,11 +180,31 @@ func TestAllowPrivilegeEscalation_1_8(t *testing.T) {
 				Containers: []corev1.Container{
 					{Name: "a"},
 					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
-					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
-					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr.To(false)}},
 				}}},
 			expectReason: `allowPrivilegeEscalation != false`,
 			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,
+		},
+		{
+			name: "multiple containers enable field error List",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "a"},
+					{Name: "b", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: nil}},
+					{Name: "c", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(true)}},
+					{Name: "d", SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: utilpointer.Bool(false)}},
+				}}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: `allowPrivilegeEscalation != false`,
+			expectDetail: `containers "a", "b", "c" must set securityContext.allowPrivilegeEscalation=false`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeRequired, Field: "spec.containers[0].securityContext.allowPrivilegeEscalation", BadValue: ""},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[1].securityContext.allowPrivilegeEscalation", BadValue: "nil"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[2].securityContext.allowPrivilegeEscalation", BadValue: true},
+			},
 		},
 		{
 			name: "multiple containers enable field error List",

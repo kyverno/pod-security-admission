@@ -65,17 +65,30 @@ func CheckSELinuxOptions() Check {
 		Versions: []VersionedCheck{
 			{
 				MinimumVersion: api.MajorMinorVersion(1, 0),
-				CheckPod:       withOptions(seLinuxOptionsV1Dot0),
+				CheckPod:       withOptions(seLinuxOptions1_0),
+			},
+			{
+				MinimumVersion: api.MajorMinorVersion(1, 31),
+				CheckPod:       withOptions(seLinuxOptions1_31),
 			},
 		},
 	}
 }
 
 var (
-	selinux_allowed_types_1_0 = sets.NewString("", "container_t", "container_init_t", "container_kvm_t")
+	selinuxAllowedTypes1_0  = sets.New("", "container_t", "container_init_t", "container_kvm_t")
+	selinuxAllowedTypes1_31 = sets.New("", "container_t", "container_init_t", "container_kvm_t", "container_engine_t")
 )
 
-func seLinuxOptionsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+func seLinuxOptions1_0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return seLinuxOptions(podMetadata, podSpec, opts, selinuxAllowedTypes1_0)
+}
+
+func seLinuxOptions1_31(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+	return seLinuxOptions(podMetadata, podSpec, opts, selinuxAllowedTypes1_31)
+}
+
+func seLinuxOptions(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options, allowedTypes sets.Set[string]) CheckResult {
 	var (
 		// sources that set bad seLinuxOptions
 		badSetters        = NewViolations(opts.withFieldErrors)
@@ -91,7 +104,7 @@ func seLinuxOptionsV1Dot0(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpe
 
 	validSELinuxOptions := func(selinuxOpts *corev1.SELinuxOptions, path *field.Path, isPodLevel bool) bool {
 		valid := true
-		if !selinux_allowed_types_1_0.Has(selinuxOpts.Type) {
+		if !allowedTypes.Has(selinuxOpts.Type) {
 			valid = false
 			badTypes.Insert(selinuxOpts.Type)
 			if path != nil {
