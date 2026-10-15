@@ -27,7 +27,8 @@ import (
 )
 
 /*
-Containers must not set runAsUser: 0
+Containers must not set runAsUser: 0,
+unless the pod is in a user namespace ("hostUsers: false").
 
 **Restricted Fields:**
 
@@ -38,6 +39,7 @@ spec.initContainers[*].securityContext.runAsUser
 **Allowed Values:**
 non-zero values
 undefined/null
+any value if "hostUsers" is false
 
 */
 
@@ -56,16 +58,25 @@ func CheckRunAsUser() Check {
 				MinimumVersion: api.MajorMinorVersion(1, 23),
 				CheckPod:       withOptions(runAsUserV1Dot23),
 			},
+			{
+				MinimumVersion: api.MajorMinorVersion(1, 35),
+				CheckPod:       withOptions(runAsUserV1Dot35),
+			},
 		},
 	}
 }
 
-func runAsUserV1Dot23(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
+func runAsUserV1Dot35(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
 	// See KEP-127: https://github.com/kubernetes/enhancements/blob/308ba8d/keps/sig-node/127-user-namespaces/README.md?plain=1#L411-L447
+	// In the 1.23 policy, this relaxation was gated on a perma-alpha feature gate.
+	// Instead of relaxing 1.23 policy, drop the relaxation there, and add it unconditionally here.
 	if relaxPolicyForUserNamespacePod(podSpec) {
 		return CheckResult{Allowed: true}
 	}
+	return runAsUserV1Dot23(podMetadata, podSpec, opts)
+}
 
+func runAsUserV1Dot23(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
 	// things that explicitly set runAsUser=0
 	badSetters := NewViolations(opts.withFieldErrors)
 
