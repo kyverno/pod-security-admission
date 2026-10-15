@@ -19,6 +19,9 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -301,7 +304,38 @@ func TestHostProbesAndHostLifecycle(t *testing.T) {
 			expectReason: "probe or lifecycle host",
 			expectDetail: `container "init" uses probe or lifecycle host "invalid.init.host"`,
 		},
+		{
+			name: "invalid httpget host in liveness probe, with field errors",
+			pod: &corev1.Pod{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: "a",
+						LivenessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{Host: "localhost"},
+							},
+						},
+						Lifecycle: &corev1.Lifecycle{
+							PreStop: &corev1.LifecycleHandler{
+								TCPSocket: &corev1.TCPSocketAction{Host: "127.0.0.1"},
+							},
+						},
+					},
+				},
+			}},
+			opts: options{
+				withFieldErrors: true,
+			},
+			expectReason: "probe or lifecycle host",
+			expectDetail: `container "a" uses probe or lifecycle hosts "127.0.0.1", "localhost"`,
+			expectErrList: field.ErrorList{
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[0].livenessProbe.httpGet.host", BadValue: "localhost"},
+				{Type: field.ErrorTypeForbidden, Field: "spec.containers[0].lifecycle.preStop.tcpSocket.host", BadValue: "127.0.0.1"},
+			},
+		},
 	}
+
+	cmpOpts := []cmp.Option{cmpopts.IgnoreFields(field.Error{}, "Detail"), cmpopts.SortSlices(func(a, b *field.Error) bool { return a.Error() < b.Error() })}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -319,6 +353,11 @@ func TestHostProbesAndHostLifecycle(t *testing.T) {
 				}
 				if e, a := tc.expectDetail, result.ForbiddenDetail; e != a {
 					t.Errorf("expected detail\n%s\ngot\n%s", e, a)
+				}
+				if result.ErrList != nil {
+					if diff := cmp.Diff(tc.expectErrList, *result.ErrList, cmpOpts...); diff != "" {
+						t.Errorf("unexpected field errors (-want,+got):\n%s", diff)
+					}
 				}
 			}
 		})

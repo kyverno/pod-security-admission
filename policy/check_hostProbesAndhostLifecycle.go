@@ -76,37 +76,43 @@ func CheckHostProbesAndHostLifecycle() Check {
 
 func hostProbesAndHostLifecycleV1Dot34(podMetadata *metav1.ObjectMeta, podSpec *corev1.PodSpec, opts options) CheckResult {
 	badContainers := sets.New[string]()
-	forbidden := sets.New[string]()
+	forbiddenHosts := sets.New[string]()
+	var errs field.ErrorList
 	visitContainers(podSpec, opts, func(container *corev1.Container, path *field.Path) {
 		// Check probes
-		if badHosts := getForbiddenHostProbes(container.LivenessProbe); len(badHosts) > 0 {
+		if badHosts, probeErrs := getForbiddenHostProbes(container.LivenessProbe, path.Child("livenessProbe"), opts.withFieldErrors); len(badHosts) > 0 {
 			badContainers.Insert(container.Name)
-			forbidden.Insert(badHosts...)
+			forbiddenHosts.Insert(badHosts...)
+			errs = append(errs, probeErrs...)
 		}
-		if badHosts := getForbiddenHostProbes(container.ReadinessProbe); len(badHosts) > 0 {
+		if badHosts, probeErrs := getForbiddenHostProbes(container.ReadinessProbe, path.Child("readinessProbe"), opts.withFieldErrors); len(badHosts) > 0 {
 			badContainers.Insert(container.Name)
-			forbidden.Insert(badHosts...)
+			forbiddenHosts.Insert(badHosts...)
+			errs = append(errs, probeErrs...)
 		}
-		if badHosts := getForbiddenHostProbes(container.StartupProbe); len(badHosts) > 0 {
+		if badHosts, probeErrs := getForbiddenHostProbes(container.StartupProbe, path.Child("startupProbe"), opts.withFieldErrors); len(badHosts) > 0 {
 			badContainers.Insert(container.Name)
-			forbidden.Insert(badHosts...)
+			forbiddenHosts.Insert(badHosts...)
+			errs = append(errs, probeErrs...)
 		}
 
 		// Check lifecycle handlers
 		if container.Lifecycle != nil {
-			if badHosts := getForbiddenHostLifecycle(container.Lifecycle.PostStart); len(badHosts) > 0 {
+			if badHosts, lifecycleErrs := getForbiddenHostLifecycle(container.Lifecycle.PostStart, path.Child("lifecycle", "postStart"), opts.withFieldErrors); len(badHosts) > 0 {
 				badContainers.Insert(container.Name)
-				forbidden.Insert(badHosts...)
+				forbiddenHosts.Insert(badHosts...)
+				errs = append(errs, lifecycleErrs...)
 			}
-			if badHosts := getForbiddenHostLifecycle(container.Lifecycle.PreStop); len(badHosts) > 0 {
+			if badHosts, lifecycleErrs := getForbiddenHostLifecycle(container.Lifecycle.PreStop, path.Child("lifecycle", "preStop"), opts.withFieldErrors); len(badHosts) > 0 {
 				badContainers.Insert(container.Name)
-				forbidden.Insert(badHosts...)
+				forbiddenHosts.Insert(badHosts...)
+				errs = append(errs, lifecycleErrs...)
 			}
 		}
 	})
 
 	if len(badContainers) > 0 {
-		return CheckResult{
+		result := CheckResult{
 			Allowed:         false,
 			ForbiddenReason: "probe or lifecycle host",
 			ForbiddenDetail: fmt.Sprintf(
@@ -114,38 +120,56 @@ func hostProbesAndHostLifecycleV1Dot34(podMetadata *metav1.ObjectMeta, podSpec *
 				pluralize("container", "containers", len(badContainers)),
 				joinQuote(sets.List(badContainers)),
 				pluralize("uses", "use", len(badContainers)),
-				pluralize("probe or lifecycle host", "probe or lifecycle hosts", len(forbidden)),
-				joinQuote(sets.List(forbidden)),
+				pluralize("probe or lifecycle host", "probe or lifecycle hosts", len(forbiddenHosts)),
+				joinQuote(sets.List(forbiddenHosts)),
 			),
 		}
+		if opts.withFieldErrors {
+			result.ErrList = &errs
+		}
+		return result
 	}
 	return CheckResult{Allowed: true}
 }
 
-func getForbiddenHostProbes(probe *corev1.Probe) []string {
+func getForbiddenHostProbes(probe *corev1.Probe, path *field.Path, withFieldErrors bool) ([]string, field.ErrorList) {
 	var badHosts []string
+	var errs field.ErrorList
 	if probe == nil {
-		return nil
+		return nil, nil
 	}
 	if probe.HTTPGet != nil && probe.HTTPGet.Host != "" {
 		badHosts = append(badHosts, probe.HTTPGet.Host)
+		if withFieldErrors {
+			errs = append(errs, withBadValue(forbidden(path.Child("httpGet", "host")), probe.HTTPGet.Host))
+		}
 	}
 	if probe.TCPSocket != nil && probe.TCPSocket.Host != "" {
 		badHosts = append(badHosts, probe.TCPSocket.Host)
+		if withFieldErrors {
+			errs = append(errs, withBadValue(forbidden(path.Child("tcpSocket", "host")), probe.TCPSocket.Host))
+		}
 	}
-	return badHosts
+	return badHosts, errs
 }
 
-func getForbiddenHostLifecycle(handler *corev1.LifecycleHandler) []string {
+func getForbiddenHostLifecycle(handler *corev1.LifecycleHandler, path *field.Path, withFieldErrors bool) ([]string, field.ErrorList) {
 	var badHosts []string
+	var errs field.ErrorList
 	if handler == nil {
-		return nil
+		return nil, nil
 	}
 	if handler.HTTPGet != nil && handler.HTTPGet.Host != "" {
 		badHosts = append(badHosts, handler.HTTPGet.Host)
+		if withFieldErrors {
+			errs = append(errs, withBadValue(forbidden(path.Child("httpGet", "host")), handler.HTTPGet.Host))
+		}
 	}
 	if handler.TCPSocket != nil && handler.TCPSocket.Host != "" {
 		badHosts = append(badHosts, handler.TCPSocket.Host)
+		if withFieldErrors {
+			errs = append(errs, withBadValue(forbidden(path.Child("tcpSocket", "host")), handler.TCPSocket.Host))
+		}
 	}
-	return badHosts
+	return badHosts, errs
 }
